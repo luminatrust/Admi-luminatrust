@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - Lumina Trust</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; font-family: 'Outfit', sans-serif; background: #0f172a; color: white; padding: 20px; }
+        .table-container { background: #1e293b; border-radius: 15px; padding: 20px; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { text-align: left; padding: 12px; background: #38bdf8; color: #0f172a; font-size: 13px; }
+        td { padding: 12px; border-bottom: 1px solid #334155; font-size: 14px; }
+        .btn { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 12px; margin-right: 5px; }
+        .btn-val { background: #38bdf8; color: #0f172a; }
+        .btn-rej { background: #ef4444; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="table-container">
+        <h3>👤 DEMANDES DE RECHARGE (DÉPÔTS)</h3>
+        <table>
+            <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>ACTION</th></tr></thead>
+            <tbody id="rechargeList"></tbody>
+        </table>
+    </div>
+
+    <div class="table-container">
+        <h3>👤 DEMANDES DE RETRAIT</h3>
+        <table>
+            <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>MÉTHODE / NUMÉRO</th><th>ACTION</th></tr></thead>
+            <tbody id="retraitList"></tbody>
+        </table>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const app = initializeApp({ databaseURL: "https://firstsolar-e2ba3-default-rtdb.firebaseio.com" });
+        const db = getDatabase(app);
+
+        // Charger les demandes
+        onValue(ref(db, 'demandes'), (snap) => {
+            const data = snap.val() || {};
+            const rList = document.getElementById('rechargeList');
+            const wList = document.getElementById('retraitList');
+            rList.innerHTML = wList.innerHTML = "";
+
+            // Recharges
+            for(let key in (data.recharges || {})) {
+                let d = data.recharges[key];
+                rList.innerHTML += `<tr><td>${d.phone}</td><td>${d.montant} FC</td><td>
+                    <button class="btn btn-val" onclick="traiter('recharges','${key}','${d.phone}',${d.montant},true)">Payé</button>
+                    <button class="btn btn-rej" onclick="traiter('recharges','${key}',null,null,false)">Rejeter</button>
+                </td></tr>`;
+            }
+            // Retraits
+            for(let key in (data.retraits || {})) {
+                let d = data.retraits[key];
+                wList.innerHTML += `<tr><td>${d.phone}</td><td>${d.montant} FC</td><td>${d.methode}</td><td>
+                    <button class="btn btn-val" onclick="traiter('retraits','${key}','${d.phone}',${d.montant},true)">Payé</button>
+                    <button class="btn btn-rej" onclick="traiter('retraits','${key}',null,null,false)">Rejeter</button>
+                </td></tr>`;
+            }
+        });
+
+        window.traiter = async (type, key, phone, montant, valider) => {
+            if(valider) {
+                const userRef = ref(db, 'users/' + phone);
+                const snap = await get(userRef);
+                let solde = snap.val().solde || 0;
+                
+                if(type === 'recharges') solde += Number(montant);
+                else solde -= Number(montant);
+                
+                await update(userRef, { solde: solde });
+                await update(ref(db, 'transactions/' + phone + '/' + Date.now()), { type: type === 'recharges' ? 'Recharge' : 'Retrait', montant: montant, date: new Date().toLocaleDateString() });
+            }
+            await remove(ref(db, 'demandes/' + type + '/' + key));
+            alert("Traitement effectué.");
+        };
+    </script>
+</body>
+</html>
