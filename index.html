@@ -50,7 +50,7 @@
             rList.innerHTML = "";
             wList.innerHTML = "";
 
-            // Gestion Recharges avec colonne REF TRANS
+            // Gestion Recharges sécurisée
             const recharges = data.recharges || {};
             if (Object.keys(recharges).length === 0) {
                 document.getElementById('emptyRecharge').style.display = "block";
@@ -70,7 +70,7 @@
                 }
             }
 
-            // Gestion Retraits
+            // Gestion Retraits sécurisée
             const retraits = data.retraits || {};
             if (Object.keys(retraits).length === 0) {
                 document.getElementById('emptyRetrait').style.display = "block";
@@ -90,15 +90,16 @@
             }
         });
 
+        // Rendre la fonction accessible globalement
         window.traiter = async (type, key, phone, montant, valider) => {
-            if(valider) {
+            if(valider && phone) {
                 const userRef = ref(db, 'users/' + phone);
                 const snap = await get(userRef);
                 if(snap.exists()){
-                    let solde = Number(snap.val().solde || 0);
-                    if(type === 'recharges') solde += Number(montant);
-                    else solde -= Number(montant);
-                    await update(userRef, { solde: solde });
+                    let currentSolde = Number(snap.val().solde || 0);
+                    let newSolde = (type === 'recharges') ? (currentSolde + Number(montant)) : (currentSolde - Number(montant));
+                    
+                    await update(userRef, { solde: newSolde });
                     
                     await update(ref(db, 'users/' + phone + '/historique_transactions/' + Date.now()), { 
                         type: type === 'recharges' ? 'Recharge' : 'Retrait', 
@@ -108,6 +109,7 @@
                     });
                 }
             }
+            // Suppression de la demande après traitement (Validation ou Rejet)
             await remove(ref(db, 'demandes/' + type + '/' + key));
         };
     </script>
