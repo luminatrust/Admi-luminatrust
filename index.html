@@ -19,12 +19,12 @@
 <body>
 
     <div class="table-container">
-        <h3>👤 DEMANDES DE RECHARGE (DÉPÔTS)</h3>
+        <h3>👤 DEMANDES DE RECHARGE</h3>
         <table id="tableRecharges">
-            <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>REF TRANS</th><th>ACTION</th></tr></thead>
+            <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>ACTION</th></tr></thead>
             <tbody id="rechargeList"></tbody>
         </table>
-        <div id="emptyRecharge" class="empty-msg" style="display:none;">Aucune demande en cours</div>
+        <div id="emptyRecharge" class="empty-msg" style="display:none;">Aucune demande</div>
     </div>
 
     <div class="table-container">
@@ -33,7 +33,7 @@
             <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>ACTION</th></tr></thead>
             <tbody id="retraitList"></tbody>
         </table>
-        <div id="emptyRetrait" class="empty-msg" style="display:none;">Aucune demande en cours</div>
+        <div id="emptyRetrait" class="empty-msg" style="display:none;">Aucune demande</div>
     </div>
 
     <script type="module">
@@ -50,66 +50,42 @@
             rList.innerHTML = "";
             wList.innerHTML = "";
 
-            // Gestion Recharges sécurisée
+            // Gestion Recharges
             const recharges = data.recharges || {};
-            if (Object.keys(recharges).length === 0) {
-                document.getElementById('emptyRecharge').style.display = "block";
-            } else {
-                document.getElementById('emptyRecharge').style.display = "none";
-                for(let key in recharges) {
-                    let d = recharges[key];
-                    rList.innerHTML += `<tr>
-                        <td>${d.phone}</td>
-                        <td>${d.montant} FC</td>
-                        <td>${d.id_transaction || 'N/A'}</td>
-                        <td>
-                            <button class="btn btn-val" onclick="traiter('recharges','${key}','${d.phone}',${d.montant},true)">Valider</button>
-                            <button class="btn btn-rej" onclick="traiter('recharges','${key}',null,null,false)">Rejeter</button>
-                        </td>
-                    </tr>`;
-                }
+            document.getElementById('emptyRecharge').style.display = Object.keys(recharges).length === 0 ? "block" : "none";
+            for(let key in recharges) {
+                let d = recharges[key];
+                rList.innerHTML += `<tr><td>${d.phone}</td><td>${d.montant} FC</td>
+                    <td><button class="btn btn-val" onclick="traiter('recharges','${key}','${d.phone}',${d.montant},true)">Valider</button>
+                    <button class="btn btn-rej" onclick="traiter('recharges','${key}',null,null,false)">Rejeter</button></td></tr>`;
             }
 
-            // Gestion Retraits sécurisée
+            // Gestion Retraits
             const retraits = data.retraits || {};
-            if (Object.keys(retraits).length === 0) {
-                document.getElementById('emptyRetrait').style.display = "block";
-            } else {
-                document.getElementById('emptyRetrait').style.display = "none";
-                for(let key in retraits) {
-                    let d = retraits[key];
-                    wList.innerHTML += `<tr>
-                        <td>${d.phone}</td>
-                        <td>${d.montant} FC</td>
-                        <td>
-                            <button class="btn btn-val" onclick="traiter('retraits','${key}','${d.phone}',${d.montant},true)">Valider</button>
-                            <button class="btn btn-rej" onclick="traiter('retraits','${key}',null,null,false)">Rejeter</button>
-                        </td>
-                    </tr>`;
-                }
+            document.getElementById('emptyRetrait').style.display = Object.keys(retraits).length === 0 ? "block" : "none";
+            for(let key in retraits) {
+                let d = retraits[key];
+                wList.innerHTML += `<tr><td>${d.phone}</td><td>${d.montant} FC</td>
+                    <td><button class="btn btn-val" onclick="traiter('retraits','${key}','${d.phone}',${d.montant},true)">Valider</button>
+                    <button class="btn btn-rej" onclick="traiter('retraits','${key}',null,null,false)">Rejeter</button></td></tr>`;
             }
         });
 
-        // Rendre la fonction accessible globalement
         window.traiter = async (type, key, phone, montant, valider) => {
             if(valider && phone) {
                 const userRef = ref(db, 'users/' + phone);
                 const snap = await get(userRef);
                 if(snap.exists()){
-                    let currentSolde = Number(snap.val().solde || 0);
-                    let newSolde = (type === 'recharges') ? (currentSolde + Number(montant)) : (currentSolde - Number(montant));
-                    
-                    await update(userRef, { solde: newSolde });
-                    
+                    let solde = Number(snap.val().solde || 0);
+                    if(type === 'recharges') solde += Number(montant);
+                    else solde -= Number(montant);
+                    await update(userRef, { solde: solde });
                     await update(ref(db, 'users/' + phone + '/historique_transactions/' + Date.now()), { 
                         type: type === 'recharges' ? 'Recharge' : 'Retrait', 
-                        montant: montant, 
-                        statut: 'SUCCÈS',
-                        date: new Date().toLocaleString() 
+                        montant: montant, statut: 'SUCCÈS', date: new Date().toLocaleString() 
                     });
                 }
             }
-            // Suppression de la demande après traitement (Validation ou Rejet)
             await remove(ref(db, 'demandes/' + type + '/' + key));
         };
     </script>
