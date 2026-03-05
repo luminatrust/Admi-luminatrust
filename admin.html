@@ -24,13 +24,13 @@
         
         input[type="number"] { width: 100%; padding: 12px; margin: 15px 0 10px; border: 1px solid #e2e8f0; border-radius: 10px; font-family: inherit; font-size: 14px; box-sizing: border-box; }
         
-        .btn-group { display: flex; gap: 10px; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
         button { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; color: white; font-family: inherit; transition: opacity 0.2s; }
         button:active { opacity: 0.8; }
         
         .btn-add { background: var(--success); }
         .btn-remove { background: var(--danger); }
-        .btn-validate { background: var(--primary); width: 100%; margin-top: 10px; }
+        .btn-validate { background: var(--primary); }
     </style>
 </head>
 <body>
@@ -56,10 +56,9 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // URL corrigée pour pointer vers Lumina Trust
         const db = getDatabase(initializeApp({ databaseURL: "https://lumina-invest-default-rtdb.firebaseio.com" }));
 
-        // 1. CHARGER LES UTILISATEURS
+        // 1. GESTION UTILISATEURS
         onValue(ref(db, "users"), (snapshot) => {
             let html = "";
             snapshot.forEach(child => {
@@ -71,10 +70,7 @@
                     <div class="card-row"><b>Solde:</b> <span style="color:var(--primary)">${(user.solde || 0).toLocaleString()} FC</span></div>
                     <div class="card-row"><b>Commissions:</b> <span>${(user.total_commissions || 0).toLocaleString()} FC</span></div>
                     <div class="card-row"><b>Code Perso:</b> <span>${user.mon_code || "N/A"}</span></div>
-                    <div class="card-row"><b>Parrain:</b> <span>${user.parraine_par || "Aucun"}</span></div>
-                    
                     <input type="number" id="amount_${phone}" placeholder="Montant en FC">
-                    
                     <div class="btn-group">
                         <button class="btn-add" onclick="addBalance('${phone}')">Ajouter</button>
                         <button class="btn-remove" onclick="removeBalance('${phone}')">Retirer</button>
@@ -84,38 +80,7 @@
             document.getElementById("users").innerHTML = html || "<p>Aucun utilisateur trouvé.</p>";
         });
 
-        // Fonction Ajouter Solde
-        window.addBalance = async (phone) => {
-            let amount = Number(document.getElementById("amount_"+phone).value);
-            if(!amount || amount <= 0) return alert("Entrez un montant valide.");
-            
-            const userRef = ref(db, "users/" + phone);
-            const snap = await get(userRef);
-            if(snap.exists()) {
-                let currentBalance = Number(snap.val().solde) || 0;
-                await update(userRef, { solde: currentBalance + amount });
-                alert("Solde ajouté avec succès !");
-                document.getElementById("amount_"+phone).value = "";
-            }
-        };
-
-        // Fonction Retirer Solde
-        window.removeBalance = async (phone) => {
-            let amount = Number(document.getElementById("amount_"+phone).value);
-            if(!amount || amount <= 0) return alert("Entrez un montant valide.");
-            
-            const userRef = ref(db, "users/" + phone);
-            const snap = await get(userRef);
-            if(snap.exists()) {
-                let currentBalance = Number(snap.val().solde) || 0;
-                if(currentBalance < amount) return alert("Solde insuffisant.");
-                await update(userRef, { solde: currentBalance - amount });
-                alert("Solde retiré avec succès !");
-                document.getElementById("amount_"+phone).value = "";
-            }
-        };
-
-        // 2. CHARGER LES RECHARGES
+        // 2. GESTION RECHARGES
         onValue(ref(db, "recharges"), (snapshot) => {
             let html = "";
             snapshot.forEach(child => {
@@ -123,30 +88,34 @@
                 let id = child.key;
                 html += `
                 <div class="card" style="border-left: 4px solid var(--success);">
-                    <div class="card-row"><b>Téléphone:</b> <span>+${data.phone}</span></div>
+                    <div class="card-row"><b>Tél:</b> <span>+${data.phone}</span></div>
                     <div class="card-row"><b>Montant:</b> <span>${Number(data.amount).toLocaleString()} FC</span></div>
-                    <button class="btn-validate" onclick="validateRecharge('${id}', '${data.phone}', ${data.amount})">Valider la recharge</button>
+                    <div class="card-row"><b>ID Transfert:</b> <span>${data.trans_id || "Non fourni"}</span></div>
+                    <div class="btn-group">
+                        <button class="btn-validate" onclick="validateRecharge('${id}', '${data.phone}', ${data.amount})">Valider</button>
+                        <button class="btn-remove" onclick="rejectRecharge('${id}')">Rejeter</button>
+                    </div>
                 </div>`;
             });
-            document.getElementById("recharges").innerHTML = html || "<p style='color:#94a3b8;font-size:14px;'>Aucune recharge en attente.</p>";
+            document.getElementById("recharges").innerHTML = html || "<p>Aucune recharge en attente.</p>";
         });
 
         window.validateRecharge = async (id, phone, amount) => {
-            if(!confirm(`Valider la recharge de ${amount} FC pour le +${phone} ?`)) return;
-            
+            if(!confirm(`Valider ${amount} FC pour +${phone} ?`)) return;
             const userRef = ref(db, "users/" + phone);
             const snap = await get(userRef);
             if(snap.exists()) {
-                let currentBalance = Number(snap.val().solde) || 0;
-                await update(userRef, { solde: currentBalance + Number(amount) });
-                await remove(ref(db, "recharges/" + id)); // Supprime la demande
-                alert("Recharge validée !");
-            } else {
-                alert("Utilisateur introuvable.");
+                await update(userRef, { solde: Number(snap.val().solde || 0) + Number(amount) });
+                await remove(ref(db, "recharges/" + id));
             }
         };
 
-        // 3. CHARGER LES RETRAITS
+        window.rejectRecharge = async (id) => {
+            if(!confirm("Rejeter cette demande ?")) return;
+            await remove(ref(db, "recharges/" + id));
+        };
+
+        // 3. GESTION RETRAITS
         onValue(ref(db, "withdraws"), (snapshot) => {
             let html = "";
             snapshot.forEach(child => {
@@ -154,22 +123,41 @@
                 let id = child.key;
                 html += `
                 <div class="card" style="border-left: 4px solid var(--danger);">
-                    <div class="card-row"><b>Téléphone:</b> <span>+${data.phone}</span></div>
+                    <div class="card-row"><b>Tél:</b> <span>+${data.phone}</span></div>
                     <div class="card-row"><b>Montant:</b> <span>${Number(data.amount).toLocaleString()} FC</span></div>
-                    <button class="btn-validate" onclick="validateWithdraw('${id}', '${data.phone}', ${data.amount})">Marquer comme payé</button>
+                    <div class="btn-group">
+                        <button class="btn-validate" onclick="validateWithdraw('${id}')">Payer</button>
+                        <button class="btn-remove" onclick="rejectWithdraw('${id}')">Rejeter</button>
+                    </div>
                 </div>`;
             });
-            document.getElementById("withdraws").innerHTML = html || "<p style='color:#94a3b8;font-size:14px;'>Aucun retrait en attente.</p>";
+            document.getElementById("withdraws").innerHTML = html || "<p>Aucun retrait en attente.</p>";
         });
 
-        window.validateWithdraw = async (id, phone, amount) => {
-            if(!confirm(`Avez-vous bien envoyé les ${amount} FC au +${phone} via Mobile Money ?`)) return;
-            
-            // On supprime juste la demande de retrait (l'argent a déjà été déduit lors de la demande par l'utilisateur)
+        window.validateWithdraw = async (id) => {
+            if(!confirm("Marquer comme payé ?")) return;
             await remove(ref(db, "withdraws/" + id));
-            alert("Retrait marqué comme traité !");
         };
 
+        window.rejectWithdraw = async (id) => {
+            if(!confirm("Rejeter ce retrait ?")) return;
+            await remove(ref(db, "withdraws/" + id));
+        };
+
+        // Fonctions auxiliaires
+        window.addBalance = async (phone) => {
+            let amount = Number(document.getElementById("amount_"+phone).value);
+            if(!amount || amount <= 0) return;
+            const snap = await get(ref(db, "users/" + phone));
+            if(snap.exists()) await update(ref(db, "users/" + phone), { solde: Number(snap.val().solde || 0) + amount });
+        };
+
+        window.removeBalance = async (phone) => {
+            let amount = Number(document.getElementById("amount_"+phone).value);
+            if(!amount || amount <= 0) return;
+            const snap = await get(ref(db, "users/" + phone));
+            if(snap.exists()) await update(ref(db, "users/" + phone), { solde: Number(snap.val().solde || 0) - amount });
+        };
     </script>
 </body>
 </html>
