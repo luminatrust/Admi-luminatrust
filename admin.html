@@ -2,92 +2,174 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Admin - Lumina Trust</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina Trust - Administration</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; font-family: 'Outfit', sans-serif; background: #0f172a; color: white; padding: 20px; }
-        .table-container { background: #1e293b; border-radius: 15px; padding: 20px; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th { text-align: left; padding: 12px; background: #38bdf8; color: #0f172a; font-size: 13px; }
-        td { padding: 12px; border-bottom: 1px solid #334155; font-size: 14px; }
-        .btn { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 12px; margin-right: 5px; }
-        .btn-val { background: #38bdf8; color: #0f172a; }
-        .btn-rej { background: #ef4444; color: white; }
-        .empty-msg { text-align: center; color: #94a3b8; padding: 20px; font-style: italic; }
+        :root { --primary: #2563eb; --bg: #f8faff; --success: #2ecc71; --danger: #e74c3c; --text: #1e293b; }
+        body { margin: 0; font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); }
+        
+        header { background: var(--primary); color: white; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2); }
+        header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+        
+        .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        h2 { color: var(--primary); font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 30px; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
+        
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); border: 1px solid #eef2f7; }
+        .card b { color: #64748b; font-size: 13px; text-transform: uppercase; }
+        .card span { font-weight: 600; color: var(--text); font-size: 15px; float: right; }
+        .card-row { margin-bottom: 10px; border-bottom: 1px dashed #f1f5f9; padding-bottom: 5px; }
+        
+        input[type="number"] { width: 100%; padding: 12px; margin: 15px 0 10px; border: 1px solid #e2e8f0; border-radius: 10px; font-family: inherit; font-size: 14px; box-sizing: border-box; }
+        
+        .btn-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; color: white; font-family: inherit; transition: opacity 0.2s; }
+        button:active { opacity: 0.8; }
+        
+        .btn-add { background: var(--success); }
+        .btn-remove { background: var(--danger); }
+        .btn-validate { background: var(--primary); width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="table-container">
-        <h3>👤 DEMANDES DE RECHARGE</h3>
-        <table id="tableRecharges">
-            <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>ACTION</th></tr></thead>
-            <tbody id="rechargeList"></tbody>
-        </table>
-        <div id="emptyRecharge" class="empty-msg" style="display:none;">Aucune demande</div>
-    </div>
+    <header>
+        <h1>Lumina Trust - Panel Admin</h1>
+    </header>
 
-    <div class="table-container">
-        <h3>👤 DEMANDES DE RETRAIT</h3>
-        <table id="tableRetraits">
-            <thead><tr><th>TÉLÉPHONE</th><th>MONTANT</th><th>ACTION</th></tr></thead>
-            <tbody id="retraitList"></tbody>
-        </table>
-        <div id="emptyRetrait" class="empty-msg" style="display:none;">Aucune demande</div>
+    <div class="container">
+        
+        <h2>💸 Demandes de Recharge</h2>
+        <div class="grid" id="recharges"></div>
+
+        <h2>🏦 Demandes de Retrait</h2>
+        <div class="grid" id="withdraws"></div>
+
+        <h2>👥 Gestion des Utilisateurs</h2>
+        <div class="grid" id="users"></div>
+
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        const db = getDatabase(initializeApp({ databaseURL: "https://firstsolar-e2ba3-default-rtdb.firebaseio.com" }));
+        // URL corrigée pour pointer vers Lumina Trust
+        const db = getDatabase(initializeApp({ databaseURL: "https://lumina-invest-default-rtdb.firebaseio.com" }));
 
-        onValue(ref(db, 'demandes'), (snap) => {
-            const data = snap.val() || {};
-            const rList = document.getElementById('rechargeList');
-            const wList = document.getElementById('retraitList');
-            
-            rList.innerHTML = "";
-            wList.innerHTML = "";
-
-            // Gestion Recharges
-            const recharges = data.recharges || {};
-            document.getElementById('emptyRecharge').style.display = Object.keys(recharges).length === 0 ? "block" : "none";
-            for(let key in recharges) {
-                let d = recharges[key];
-                rList.innerHTML += `<tr><td>${d.phone}</td><td>${d.montant} FC</td>
-                    <td><button class="btn btn-val" onclick="traiter('recharges','${key}','${d.phone}',${d.montant},true)">Valider</button>
-                    <button class="btn btn-rej" onclick="traiter('recharges','${key}',null,null,false)">Rejeter</button></td></tr>`;
-            }
-
-            // Gestion Retraits
-            const retraits = data.retraits || {};
-            document.getElementById('emptyRetrait').style.display = Object.keys(retraits).length === 0 ? "block" : "none";
-            for(let key in retraits) {
-                let d = retraits[key];
-                wList.innerHTML += `<tr><td>${d.phone}</td><td>${d.montant} FC</td>
-                    <td><button class="btn btn-val" onclick="traiter('retraits','${key}','${d.phone}',${d.montant},true)">Valider</button>
-                    <button class="btn btn-rej" onclick="traiter('retraits','${key}',null,null,false)">Rejeter</button></td></tr>`;
-            }
+        // 1. CHARGER LES UTILISATEURS
+        onValue(ref(db, "users"), (snapshot) => {
+            let html = "";
+            snapshot.forEach(child => {
+                let user = child.val();
+                let phone = child.key;
+                html += `
+                <div class="card">
+                    <div class="card-row"><b>Téléphone:</b> <span>+${phone}</span></div>
+                    <div class="card-row"><b>Solde:</b> <span style="color:var(--primary)">${(user.solde || 0).toLocaleString()} FC</span></div>
+                    <div class="card-row"><b>Commissions:</b> <span>${(user.total_commissions || 0).toLocaleString()} FC</span></div>
+                    <div class="card-row"><b>Code Perso:</b> <span>${user.mon_code || "N/A"}</span></div>
+                    <div class="card-row"><b>Parrain:</b> <span>${user.parraine_par || "Aucun"}</span></div>
+                    
+                    <input type="number" id="amount_${phone}" placeholder="Montant en FC">
+                    
+                    <div class="btn-group">
+                        <button class="btn-add" onclick="addBalance('${phone}')">Ajouter</button>
+                        <button class="btn-remove" onclick="removeBalance('${phone}')">Retirer</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById("users").innerHTML = html || "<p>Aucun utilisateur trouvé.</p>";
         });
 
-        window.traiter = async (type, key, phone, montant, valider) => {
-            if(valider && phone) {
-                const userRef = ref(db, 'users/' + phone);
-                const snap = await get(userRef);
-                if(snap.exists()){
-                    let solde = Number(snap.val().solde || 0);
-                    if(type === 'recharges') solde += Number(montant);
-                    else solde -= Number(montant);
-                    await update(userRef, { solde: solde });
-                    await update(ref(db, 'users/' + phone + '/historique_transactions/' + Date.now()), { 
-                        type: type === 'recharges' ? 'Recharge' : 'Retrait', 
-                        montant: montant, statut: 'SUCCÈS', date: new Date().toLocaleString() 
-                    });
-                }
+        // Fonction Ajouter Solde
+        window.addBalance = async (phone) => {
+            let amount = Number(document.getElementById("amount_"+phone).value);
+            if(!amount || amount <= 0) return alert("Entrez un montant valide.");
+            
+            const userRef = ref(db, "users/" + phone);
+            const snap = await get(userRef);
+            if(snap.exists()) {
+                let currentBalance = Number(snap.val().solde) || 0;
+                await update(userRef, { solde: currentBalance + amount });
+                alert("Solde ajouté avec succès !");
+                document.getElementById("amount_"+phone).value = "";
             }
-            await remove(ref(db, 'demandes/' + type + '/' + key));
         };
+
+        // Fonction Retirer Solde
+        window.removeBalance = async (phone) => {
+            let amount = Number(document.getElementById("amount_"+phone).value);
+            if(!amount || amount <= 0) return alert("Entrez un montant valide.");
+            
+            const userRef = ref(db, "users/" + phone);
+            const snap = await get(userRef);
+            if(snap.exists()) {
+                let currentBalance = Number(snap.val().solde) || 0;
+                if(currentBalance < amount) return alert("Solde insuffisant.");
+                await update(userRef, { solde: currentBalance - amount });
+                alert("Solde retiré avec succès !");
+                document.getElementById("amount_"+phone).value = "";
+            }
+        };
+
+        // 2. CHARGER LES RECHARGES
+        onValue(ref(db, "recharges"), (snapshot) => {
+            let html = "";
+            snapshot.forEach(child => {
+                let data = child.val();
+                let id = child.key;
+                html += `
+                <div class="card" style="border-left: 4px solid var(--success);">
+                    <div class="card-row"><b>Téléphone:</b> <span>+${data.phone}</span></div>
+                    <div class="card-row"><b>Montant:</b> <span>${Number(data.amount).toLocaleString()} FC</span></div>
+                    <button class="btn-validate" onclick="validateRecharge('${id}', '${data.phone}', ${data.amount})">Valider la recharge</button>
+                </div>`;
+            });
+            document.getElementById("recharges").innerHTML = html || "<p style='color:#94a3b8;font-size:14px;'>Aucune recharge en attente.</p>";
+        });
+
+        window.validateRecharge = async (id, phone, amount) => {
+            if(!confirm(`Valider la recharge de ${amount} FC pour le +${phone} ?`)) return;
+            
+            const userRef = ref(db, "users/" + phone);
+            const snap = await get(userRef);
+            if(snap.exists()) {
+                let currentBalance = Number(snap.val().solde) || 0;
+                await update(userRef, { solde: currentBalance + Number(amount) });
+                await remove(ref(db, "recharges/" + id)); // Supprime la demande
+                alert("Recharge validée !");
+            } else {
+                alert("Utilisateur introuvable.");
+            }
+        };
+
+        // 3. CHARGER LES RETRAITS
+        onValue(ref(db, "withdraws"), (snapshot) => {
+            let html = "";
+            snapshot.forEach(child => {
+                let data = child.val();
+                let id = child.key;
+                html += `
+                <div class="card" style="border-left: 4px solid var(--danger);">
+                    <div class="card-row"><b>Téléphone:</b> <span>+${data.phone}</span></div>
+                    <div class="card-row"><b>Montant:</b> <span>${Number(data.amount).toLocaleString()} FC</span></div>
+                    <button class="btn-validate" onclick="validateWithdraw('${id}', '${data.phone}', ${data.amount})">Marquer comme payé</button>
+                </div>`;
+            });
+            document.getElementById("withdraws").innerHTML = html || "<p style='color:#94a3b8;font-size:14px;'>Aucun retrait en attente.</p>";
+        });
+
+        window.validateWithdraw = async (id, phone, amount) => {
+            if(!confirm(`Avez-vous bien envoyé les ${amount} FC au +${phone} via Mobile Money ?`)) return;
+            
+            // On supprime juste la demande de retrait (l'argent a déjà été déduit lors de la demande par l'utilisateur)
+            await remove(ref(db, "withdraws/" + id));
+            alert("Retrait marqué comme traité !");
+        };
+
     </script>
 </body>
 </html>
